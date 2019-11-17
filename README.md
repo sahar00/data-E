@@ -1,42 +1,199 @@
-# Data Engineering Capstone Project
+_(Udacity: Data Engineering Nano Degree) | jukka.kansanaho@gmail.com | 2019-06-09_
+_This project is a part of [Udacity's Data Engineer Nano Degree](https://eu.udacity.com/course/data-engineer-nanodegree--nd027)._
 
-## Scope of Works
-The purpose of this project is to demonstrate various skills associated with data engineering projects. In particular, developing ETL pipelines using Airflow, constructing data warehouses through Redshift databases and S3 data storage as well as defining efficient data models e.g. star schema. As an example I will perform a deep dive into US immigration, primarily focusing on the type of visas being issued and the profiles associated. The scope of this project is limited to the data sources listed below with data being aggregated across numerous dimensions such as visatype, gender, port_of_entry, nationality and month.
+# PROJECT-4: Data Lake
 
-Further details and analysis can be found [here](./capstone_notebook.ipynb)
+## Quick start
 
-## Data Description & Sources
-- I94 Immigration Data: This data comes from the US National Tourism and Trade Office found [here](https://travel.trade.gov/research/reports/i94/historical/2016.html). Each report contains international visitor arrival statistics by world regions and select countries (including top 20), type of visa, mode of transportation, age groups, states visited (first intended address only), and the top ports of entry (for select countries).
-- World Temperature Data: This dataset came from Kaggle found [here](https://www.kaggle.com/berkeleyearth/climate-change-earth-surface-temperature-data).
-- U.S. City Demographic Data: This dataset contains information about the demographics of all US cities and census-designated places with a population greater or equal to 65,000. Dataset comes from OpenSoft found [here](https://public.opendatasoft.com/explore/dataset/us-cities-demographics/export/).
-- Airport Code Table: This is a simple table of airport codes and corresponding cities. The airport codes may refer to either IATA airport code, a three-letter code which is used in passenger reservation, ticketing and baggage-handling systems, or the ICAO airport code which is a four letter code used by ATC systems and for airports that do not have an IATA airport code (from wikipedia). It comes from [here](https://datahub.io/core/airport-codes#data).
+First, rename dl_template.cfg to dl.cfg and fill in the open fields. Fill in AWS acces key (KEY) and secret (SECRET).
 
-After extracting various immigration codes from the  `I94_SAS_Labels_Descriptions.SAS` file, I was able to define a star schema by extracting the immigration fact table and various dimension tables as shown below:
-<img src="./images/schema.png"/>
+Example data is in data folder. To run the script to use that data, do the wfollowing:
 
-Additionally, airports associated with `port_of_entry` could be identified through the `Airport Code Table`. The table is exhaustive and extends well beyond just the US as highlighted below:
-<img src="./images/map.png"/>
+* Create an AWS S3 bucket.
+* Edit dl.cfg: add your S3 bucket name.
+* Copy **log_data** and **song_data** folders to your own S3 bucket.
+* Create **output_data** folder in your S3 bucket.
+* NOTE: You can also run script locally and use local input files. Just comment/uncomment rows in `etl.py` main() function.
 
-## Data Storage
-<p align="center"><img src="./images/redshift.png" style="height: 100%; width: 100%; max-width: 200px" /></p>
-Data was stored in S3 buckets in a collection of CSV and PARQUET files. The immigration dataset extends to several million rows and thus this dataset was converted to PARQUET files to allow for easy data manipulation and processing through Dask and the ability to write to Redshift.<br><br>
-<p align="center"><img src="./images/dask.png" style="height: 100%; width: 100%; max-width: 200px" /></p>
-Dask is an extremely powerful and flexible library to handle parallel computing for dataframes in Python. Through this library, I was able to scale pandas and numpy workflows with minimal overhead. Whilst PySpark is a great API to Spark and tool to handle big data, I also highly recommend Dask, which you can read more about [here](https://dask.org/).
+After installing python3 + Apache Spark (pyspark) libraries and dependencies, run from command line:
 
-## ETL Pipeline
-<p align="center"><img src="./images/airflow.png" style="height: 100%; width: 100%; max-width: 200px" /></p>
-Defining the data model and creating the star schema involves various steps, made significantly easier through the use of Airflow. The process of extracting files from S3 buckets, transforming the data and then writing CSV and PARQUET files to Redshift is accomplished through various tasks highlighted below in the ETL Dag graph. These steps include:
-- Extracting data from SAS Documents and writing as CSV files to S3 immigration bucket
-- Extracting remaining CSV and PARQUET files from S3 immigration bucket
-- Writing CSV and PARQUET files from S3 to Redshift
-- Performing data quality checks on the newly created tables
-<img src="./images/dag_graph.png"/>
+* `python3 etl.py` (to process all the input JSON data into Spark parquet files.)
 
-## Conclusion
-Overall this project was a small undertaking to demonstrate the steps involved in developing a data warehouse that is easily scalable. Skills include:
-* Creating a Redshift Cluster, IAM Roles, Security groups.
-* Developing an ETL Pipeline that copies data from S3 buckets into staging tables to be processed into a star schema
-* Developing a star schema with optimization to specific queries required by the data analytics team.
-* Using Airflow to automate ETL pipelines using Airflow, Python, Amazon Redshift.
-* Writing custom operators to perform tasks such as staging data, filling the data warehouse, and validation through data quality checks.
-* Transforming data from various sources into a star schema optimized for the analytics team's use cases.
+---
+
+## Overview
+
+This Project-4 handles data of a music streaming startup, Sparkify. Data set is a set of files in JSON format stored in AWS S3 buckets and contains two parts:
+
+* **s3://udacity-dend/song_data**: static data about artists and songs
+  Song-data example:
+  `{"num_songs": 1, "artist_id": "ARJIE2Y1187B994AB7", "artist_latitude": null, "artist_longitude": null, "artist_location": "", "artist_name": "Line Renaud", "song_id": "SOUPIRU12A6D4FA1E1", "title": "Der Kleine Dompfaff", "duration": 152.92036, "year": 0}`
+
+* **s3://udacity-dend/log_data**: event data of service usage e.g. who listened what song, when, where, and with which client
+  ![Log-data example (log-data/2018/11/2018-11-12-events.json)](./Udacity-DEND-Project4-logdata-20190609.png)
+
+Below, some figures about the example data set (results after running the etl.py):
+
+* s3://udacity-dend/song_data: 14897 files
+* s3://udacity-dend/log_data: 31 files
+
+Project builds an ETL pipeline (Extract, Transform, Load) to Extract data from JSON files stored in AWS S3, process the data with Apache Spark, and write the data back to AWS S3 as Spark parquet files. As technologies, Project-4 uses python, AWS S3 and Apache Spark.
+
+As a local run on laptop, pipeline takes around 1min 40sec to execute with the given test data set.
+
+Running the same ETL script in AWS us-west-2 (spark machine, input_data S3 and output_data S3 buckets all in the same region) with 1 song_data JSON file and 1 log_data JSON file took 8min 16sec. See details below:
+
+* Reading 1 JSON file from song_data: 11.2sec
+* Processing and writing songs_table: 23.8sec
+* Processing and writing artists_table: 19.6sec
+* Reading 1 JSON file from log_data: 1.3sec
+* Processing and writing users_table: 1min 3.9sec
+* Processing and writing time_table: 2min 56.2sec
+* Processing and writing songplays_table: 2min 49.6sec
+
+NOTE: ETL script has been tested with limited input data (stored in S3) due to very slow S3 read and write procedure.
+
+---
+
+## About Database
+
+Sparkify analytics database (called here sparkifydb) schema has a star design. Start design means that it has one Fact Table having business data, and supporting Dimension Tables. Star DB design is maybe the most common schema used in ETL pipelines since it separates Dimension data into their own tables in a clean way and collects business critical data into the Fact table allowing flexible queries.
+The Fact Table answers one of the key questions: what songs users are listening to. DB schema is the following:
+
+![SparkifyDB schema as ER Diagram](./Udacity-DEND-Project-4-ERD-20190609v2.png)
+
+_*SparkifyDB schema as ER Diagram.*_
+
+### Purpose of the database and ETL pipeline
+
+In context of Sparkify, this Data Lake based ETL solution provides very elastic way of processing data. As pros, we can mention the following:
+
+* Collecting input data to AWS S3, process the data as needed, and write it back to S3 without maintaining a separate database for intermediate or final data.
+* This solution is most probably also less expensive as alternative database solutions like PostgresSQL DB or Redshift since AWS processing resources are needed only during the data processing, not for collecting or storing the data.
+* Data processing is also fast, since Spark executes data processing in RAM and as a cluster which offers parallel processing capabilities.
+* Spark creates schema on-the-fly, so separate schema design is not necessary needed.
+
+However, as cons we could mention the following:
+
+* Intensive RAM need on Spark cluster nodes.
+* Also, data loading from S3 and to S3 may take more time than in alternative solutions utilising DB solutions since network connection is the slowest part of the ETL pipeline (compared to accessing data from RAM or processing data in CPU).
+* In addition, S3 seems to be (as an object store) sub-optimal for storing Spark parquet type of files that might be very small and lots of them. So, Spark DataFrame partitioning needs careful attention.
+* AWS account type also impacts S3 performance and throughput, which in turn impacts ETL pipeline script performance. E.g. if using AWS Education account type, S3 performance and hence ETL script performance may be very poor.
+* One suggestions among Spark users seems to be read input data from S3, process it in Spark, write output data to parquet file locally, and upload generated parquet files to S3 as a patch procedure.
+
+### Raw JSON data structures
+
+* **log_data**: log_data contains data about what users have done (columns: event_id, artist, auth, firstName, gender, itemInSession, lastName, length, level, location, method, page, registration, sessionId, song, status, ts, userAgent, userId)
+* **song_data**: song_data contains data about songs and artists (columns: num_songs, artist_id, artist_latitude, artist_longitude, artist_location, artist_name, song_id, title, duration, year)
+
+Findings:
+
+* Input data was available first offline during the development phase and later from s3://udacity-dend/song_data and s3://udacity-dend/log_data
+* As expected, reading and especially writing data (song_data, log_data) to and from S3 is very slow process due to large amount of input data and slow network connection. See above for figures with 1 song_data file and 1 log_data file.
+
+### Fact Table
+
+* **songplays**: song play data together with user, artist, and song info (songplay_id, start_time, user_id, level, song_id, artist_id, session_id, location, user_agent)
+
+### Dimension Tables
+
+* **users**: user info (columns: user_id, first_name, last_name, gender, level)
+* **songs**: song info (columns: song_id, title, artist_id, year, duration)
+* **artists**: artist info (columns: artist_id, name, location, latitude, longitude)
+* **time**: detailed time info about song plays (columns: start_time, hour, day, week, month, year, weekday)
+
+Findings:
+
+* Output data was written to own AWS S3 bucket.
+* Both Fact table (songplays) and Dimension tables (users, songs, artists, time) are extracted from inout data and written back to S3 as Spark parquet files.
+* Each time `etl.py` is run, it creates new directories for each table to output_data/ directory based on the script start time (e.g. songs_table.parquet_2019-06-10-10-07-20-873438). This way there's no collision or need to erase old data between different runs.
+* Spark writes temporary folders and files during the parquet file creation process. Used AWS S3 user requires admin rights for Spark to be able to rename (copy + paste + delete) created temp folders and files.
+* In overall, network speed, processing speed, data read & write speed depends heavily on used (AWS) cloud resources. Faster CPU, more RAM, faster disks, faster network connection obviously give better start-to-end time for whole ETL pipeline.
+* ETL script requires some optimisation for bigger data amounts (e.g. write parquet files locally and only then upload them to S3).
+
+---
+
+## HOWTO use
+
+**Project has one script:**
+
+* **etl.py**: This script uses data in s3:/udacity-dend/song_data and s3:/udacity-dend/log_data, processes it, and inserts the processed data into DB.
+
+### Prerequisites
+
+Python3 is recommended as the environment. The most convenient way to install python is to use Anaconda (https://www.anaconda.com/distribution/) either via GUI or command line.
+Also, the following libraries are needed for the python environment to make Jupyter Notebook and Apache Spark to work:
+
+* _pyspark_ (+ dependencies) to enable script to create a SparkSession. (See https://spark.apache.org/docs/latest/api/python/pyspark.sql.html)
+* NOTE: in the beginning of the execution, script downloads hadoop-aws package to enable connection to AWS.
+
+### Run etl.py
+
+Type to command line:
+
+`python3 etl.py`
+
+* Script executes Apache Spark SQL commands to read source data (JSON files) from S3 to memory as Spark DataFrames.
+* In memory, data is further manipulated to analytics DataFrames.
+* Analytics dataFrames are stored back to S4 as Spark parquet files.
+* Script writes to console the query it's executing at any given time and if the query was successfully executed.
+* Also, script writes to console DataFrame schemas and show a handful of example data.
+* In the end, script tells if whole ETL-pipeline was successfully executed.
+
+Output: input JSON data is processed and analysed data is written back to S3 as Spark parquet files.
+
+## Data cleaning process
+
+`etl.py` works the following way to process the data from source files to analytics tables:
+
+* Loading part of the script (COPY from JSON to staging tables) query takes the data as it is.
+* When inserting data from staging tables to analytics tables, queries remove any duplicates (INSERT ... SELECT DISTINCT ...).
+
+## Example queries
+
+* NOTE: There are some example queries implemented in `etl.py` and executed in the end of the script run.
+* Get users and songs they listened at particular time. Limit query to 1000 hits:
+
+```
+SELECT  sp.songplay_id,
+        u.user_id,
+        s.song_id,
+        u.last_name,
+        sp.start_time,
+        a.name,
+        s.title
+FROM songplays AS sp
+        JOIN users   AS u ON (u.user_id = sp.user_id)
+        JOIN songs   AS s ON (s.song_id = sp.song_id)
+        JOIN artists AS a ON (a.artist_id = sp.artist_id)
+        JOIN time    AS t ON (t.start_time = sp.start_time)
+ORDER BY (sp.start_time)
+LIMIT 1000;
+```
+
+* Get count of rows in each Dimension table:
+
+```
+SELECT COUNT(*)
+FROM songs_table;
+
+SELECT COUNT(*)
+FROM artists_table;
+
+SELECT COUNT(*)
+FROM users_table;
+
+SELECT COUNT(*)
+FROM time_table;
+```
+
+* Get count of rows in Fact table:
+
+```
+SELECT COUNT(*)
+FROM songplays_table;
+```
+
+## Summary
+
+Project-4 provides customer startup Sparkify tools to analyse their service data in a flexible way and help them answer their key business questions like "Who listened which song and when?"
